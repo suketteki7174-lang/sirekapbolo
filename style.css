@@ -1,0 +1,35 @@
+table { 
+  width:100%; 
+  border-collapse: collapse; 
+  background:#fff; 
+  border-radius:8px; 
+  overflow:hidden; 
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
+  border:1px solid #ccc; /* garis luar */
+}
+
+th, td { 
+  padding:12px 10px; 
+  border:1px solid #ccc; /* garis semua sel */
+  text-align:center; 
+  font-size:0.95em; 
+}
+
+tbody tr:hover { 
+  background:#f1f5fb; 
+}
+
+th { 
+  background:#1a73e8; 
+  color:white; 
+  font-weight:600; 
+}
+/* ===== CENTER KHUSUS TEKS HOME (AMAN) ===== */
+#main-content{
+  min-height: calc(100vh - 70px); /* tinggi layar dikurangi navbar */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* tengah vertikal */
+  align-items: center;     /* tengah horizontal */
+  text-align: center;
+}
