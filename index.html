@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aplikasi Rekap Data Desa</title>
+
+<!-- Manifest PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b3d91">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',Tahoma,sans-serif;color:#333;min-height:100vh;display:flex;flex-direction:column;}
+body::before,body::after{content:"";position:fixed;inset:0;background-size:cover;background-position:center;z-index:-1;opacity:0;transition:opacity 2s}
+body::before{background-image:url('form1.png');opacity:1}
+body::after{background-image:url('form2.png')}
+body.bg1::before{opacity:1} body.bg1::after{opacity:0}
+body.bg2::before{opacity:0} body.bg2::after{opacity:1}
+nav{background:rgba(11,61,145,.8);position:sticky;top:0;z-index:99;padding:5px 0;}
+nav ul{list-style:none;display:flex;flex-wrap:wrap;justify-content:center;max-width:600px;margin:auto;}
+nav li{position:relative;margin:2px;}
+nav a{padding:10px 12px;display:block;color:#fff;font-weight:700;text-decoration:none;text-align:center;white-space:nowrap;border-radius:5px;background:rgba(11,61,145,.6);}
+nav li ul{display:none;position:absolute;left:50%;transform:translateX(-50%);background:rgba(11,61,145,.9);min-width:180px;border-radius:5px;overflow:hidden;z-index:100;}
+nav li.show ul{display:block;}
+nav li ul li a{background:rgba(11,61,145,0.7);margin:0;text-align:left;padding-left:10px;}
+nav li ul li a:hover{background:rgba(26,115,232,0.8);}
+.content{width:100%;max-width:600px;margin:20px auto;padding:20px;background:rgba(255,255,255,.96);border-radius:10px;flex:1;}
+form{background:#fff;padding:15px;border-radius:8px;margin:15px 0;overflow-x:auto;}
+.form-grid{display:flex;flex-direction:column;gap:8px;}
+.form-item{display:flex;flex-direction:column;gap:3px;align-items:flex-start;}
+.form-item label{font-weight:600;font-size:14px;width:100%;}
+.form-item input,.form-item select{padding:8px;border-radius:5px;border:1px solid #ccc;font-size:14px;width:100%;}
+form button{padding:10px 25px;font-weight:600;margin-top:10px;align-self:flex-start;}
+.table-actions{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0;}
+.table-actions select,.table-actions button{padding:8px 12px;}
+.table-wrapper{overflow-x:auto;width:100%;}
+table{width:100%;border-collapse:collapse;background:#fff;min-width:400px;border:1px solid #000;}
+th, td{border:1px solid #000;padding:6px;text-align:center;}
+th{background:#1a73e8;color:#fff;}
+.total-row{font-weight:bold;background:#eef3fb;text-align:center;}
+footer{background:linear-gradient(135deg,#0b3d91,#1a73e8);color:#fff;padding:25px 15px;font-size:14px;}
+.footer-inner{max-width:600px;margin:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;}
+.footer-box h4{margin-bottom:8px;font-size:15px;font-weight:700;border-bottom:2px solid rgba(255,255,255,.4);display:inline-block;padding-bottom:3px;}
+.footer-box p{font-size:13px;line-height:1.6;}
+.footer-bottom{margin-top:20px;padding-top:12px;border-top:1px solid rgba(255,255,255,.3);text-align:center;font-size:13px;opacity:.9;}
+@media(max-width:768px){nav li{flex:1 0 45%;}}
+@media(max-width:480px){nav li{flex:1 0 30%;}}
+.notification{position:fixed;top:20px;right:20px;padding:10px 15px;border-radius:5px;color:#fff;font-weight:700;z-index:999;display:none;}
+.notification.success{background:green;}
+.notification.error{background:red;}
+</style>
+</head>
+<body class="bg1">
+
+<nav><ul id="navbar"></ul></nav>
+<div class="content" id="main-content">
+<h2 style="text-align:center">APLIKASI REKAP DATA DESA</h2>
+<p style="text-align:center">Kecamatan Botolinggo – Kabupaten Bondowoso</p>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-box"><h4>Aplikasi</h4><p>Aplikasi Rekap Data Desa digunakan untuk pencatatan, pengelolaan, dan rekapitulasi data desa secara terintegrasi di tingkat kecamatan.</p></div>
+    <div class="footer-box"><h4>Wilayah</h4><p>Kecamatan Botolinggo<br>Kabupaten Bondowoso<br>Provinsi Jawa Timur</p></div>
+    <div class="footer-box"><h4>Tahun</h4><p>Sistem Data Desa Terpadu<br>© <span id="year"></span></p></div>
+  </div>
+  <div class="footer-bottom">Aplikasi Rekap Data Desa • Kecamatan Botolinggo – Kabupaten Bondowoso</div>
+</footer>
+
+<div id="notification" class="notification"></div>
+
+<script>
+// ==================== FIREBASE ====================
+const firebaseConfig = {
+  apiKey: "API_KEY_FIREBASE",
+  authDomain: "rekapdatadesa.firebaseapp.com",
+  databaseURL: "https://rekapdatadesa-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "rekapdatadesa",
+  storageBucket: "rekapdatadesa.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ==================== BACKGROUND ====================
+let bg=1;
+setInterval(()=>{bg=bg===1?2:1;document.body.className=bg===1?'bg1':'bg2';},3000);
+
+// ==================== DATA MASTER ====================
+const desaList=['BOTOLINGGO','GAYAM','GAYAM LOR','KLEKEAN','PENANG','LANAS','LUMUTAN','SUMBER CANTING'];
+const bulanList=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const tahunList=[2026,2027,2028,2029,2030];
+const fields={
+ kependudukan:['laki','perempuan','pindah','meninggal','datang','lahir'],
+ produkapil:['wajib_ktp','usia17_punya_ktp','usia17_tdk_ktp','keluarga_kk','keluarga_tdk_kk'],
+ akses:['bpjs','askes','kis','jampersal','lain','tidak'],
+ bantuan:['pkh_bpnt','pkh_lansia','blt_cukai','blt_s','blt_dd','lainnya'],
+ kondisi:['janda_u70','anak_yatim','stunting','difabel','rtm','rtlh']
+};
+const data={};
+Object.keys(fields).forEach(k=>{data[k]={}; desaList.forEach(d=>data[k][d]=[]);});
+
+// ==================== NOTIFIKASI ====================
+function notify(msg,type='success'){
+  const n=document.getElementById('notification');
+  n.textContent=msg;
+  n.className=`notification ${type}`;
+  n.style.display='block';
+  setTimeout(()=>{n.style.display='none';},2500);
+}
+
+// ==================== NAVBAR ====================
+const navbar=document.getElementById('navbar');
+navbar.innerHTML=`
+<li><a href="#">KECAMATAN</a>
+ <ul>${Object.keys(fields).map(f=>`<li><a href="#" onclick="rekapKecamatan('${f}','${f}');closeDropdowns();return false">${f.toUpperCase()}</a></li>`).join('')}</ul>
+</li>
+${desaList.map(d=>`<li><a href="#">${d}</a><ul>${Object.keys(fields).map(f=>`<li><a href="#" onclick="formDesa('${d}','${f}');closeDropdowns();return false">${f.toUpperCase()}</a></li>`).join('')}</ul></li>`).join('')}
+`;
+
+document.querySelectorAll('nav > ul > li > a').forEach(a=>{
+  a.addEventListener('click',function(e){
+    e.preventDefault();
+    document.querySelectorAll('nav > ul > li').forEach(li=>{
+      if(li.querySelector('ul') && li.querySelector('ul')!==a.nextElementSibling){
+        li.classList.remove('show');
+      }
+    });
+    if(a.parentElement.querySelector('ul')) a.parentElement.classList.toggle('show');
+  });
+});
+
+// ==================== FORM DESA ====================
+function formDesa(desa,tipe){
+ const f=fields[tipe];
+ const c=document.getElementById('main-content');
+ c.innerHTML=`
+ <h3>${tipe.toUpperCase()} DESA ${desa}</h3>
+ <form id="form">
+  <div class="form-grid">
+   <div class="form-item"><label>Bulan</label><select name="bulan">${bulanList.map(b=>`<option>${b}</option>`).join('')}</select></div>
+   <div class="form-item"><label>Tahun</label><select name="tahun">${tahunList.map(t=>`<option>${t}</option>`).join('')}</select></div>
+   ${f.map(x=>`<div class="form-item"><label>${x.replace(/_/g,' ').toUpperCase()}</label><input type="number" name="${x}" value="" min="0"></div>`).join('')}
+  </div>
+  <button type="submit">Simpan Data</button>
+ </form>
+ <div class="table-actions">
+  <select id="fb"><option value="">Semua Bulan</option>${bulanList.map(b=>`<option>${b}</option>`).join('')}</select>
+  <select id="ft"><option value="">Semua Tahun</option>${tahunList.map(t=>`<option>${t}</option>`).join('')}</select>
+  <button onclick="render()">Cari</button>
+  <button onclick="exportPDF('${tipe}_${desa}')">📄 Export PDF</button>
+ </div>
+ <div class="table-wrapper"><table id="table"><thead><tr><th>No</th><th>Bulan</th><th>Tahun</th>${f.map(x=>`<th>${x.replace(/_/g,' ')}</th>`).join('')}<th>Total</th><th>Aksi</th></tr></thead><tbody></tbody></table></div>
+ `;
+ const tb=c.querySelector('tbody');
+ const fb=c.querySelector('#fb');
+ const ft=c.querySelector('#ft');
+ const form=c.querySelector('#form');
+
+ db.ref(`data/${tipe}/${desa}`).get().then(snapshot=>{
+   data[tipe][desa]=snapshot.exists()?Object.values(snapshot.val()):[];
+   render();
+ });
+
+ form.onsubmit=e=>{
+   e.preventDefault();
+   const fd=new FormData(form);
+   const o={bulan:fd.get('bulan'),tahun:+fd.get('tahun')};
+   f.forEach(x=>o[x]=+fd.get(x));
+   db.ref(`data/${tipe}/${desa}`).push(o)
+     .then(()=>{
+       data[tipe][desa].push(o);
+       render();
+       form.reset();
+       notify("Data berhasil disimpan ✅",'success');
+     })
+     .catch(err=>{
+       console.error(err);
+       notify("Gagal menyimpan data ❌",'error');
+     });
+ };
+
+ window.render=()=>{
+   tb.innerHTML='';
+   data[tipe][desa].filter(r=>(!fb.value||r.bulan===fb.value)&&(!ft.value||r.tahun==ft.value)).forEach((r,i)=>{
+     let t=f.reduce((s,x)=>s+r[x],0);
+     tb.innerHTML+=`<tr>
+       <td>${i+1}</td><td>${r.bulan}</td><td>${r.tahun}</td>
+       ${f.map(x=>`<td>${r[x] || 0}</td>`).join('')}
+       <td>${t}</td>
+       <td><button onclick="hapus('${tipe}','${desa}',${i})">Hapus</button></td>
+     </tr>`;
+   });
+ };
+ render();
+}
+
+// ==================== REKAP KECAMATAN ====================
+function rekapKecamatan(tipe,judul){
+ const f=fields[tipe];
+ const c=document.getElementById('main-content');
+ c.innerHTML=`
+ <h3>REKAP ${judul.toUpperCase()} KECAMATAN</h3>
+ <div class="table-actions">
+  <select id="fb"><option value="">Semua Bulan</option>${bulanList.map(b=>`<option>${b}</option>`).join('')}</select>
+  <select id="ft"><option value="">Semua Tahun</option>${tahunList.map(t=>`<option>${t}</option>`).join('')}</select>
+  <button onclick="render()">Cari</button>
+  <button onclick="exportPDF('${judul}_kecamatan')">📄 Export PDF</button>
+ </div>
+ <div class="table-wrapper">
+   <table id="table">
+     <thead>
+       <tr>
+         <th>No</th><th>Desa</th><th>Bulan</th><th>Tahun</th>
+         ${f.map(x=>`<th>${x.replace(/_/g,' ')}</th>`).join('')}
+         <th>Total</th>
+       </tr>
+     </thead>
+     <tbody></tbody>
+   </table>
+ </div>
+ `;
+ const tb=c.querySelector('tbody');
+ const fb=c.querySelector('#fb');
+ const ft=c.querySelector('#ft');
+
+ Promise.all(desaList.map(d=>db.ref(`data/${tipe}/${d}`).get().then(snap=>{
+   data[tipe][d]=snap.exists()?Object.values(snap.val()):[];
+ }))).then(()=>render());
+
+ window.render=()=>{
+   tb.innerHTML=''; let no=1,grand=0,tot={};
+   f.forEach(x=>tot[x]=0);
+   desaList.forEach(d=>{
+     data[tipe][d].filter(r=>(!fb.value||r.bulan===fb.value)&&(!ft.value||r.tahun==ft.value)).forEach(r=>{
+       let row=0; f.forEach(x=>{tot[x]+=r[x]; row+=r[x];}); grand+=row;
+       tb.innerHTML+=`<tr>
+         <td>${no++}</td>
+         <td>${d}</td>
+         <td>${r.bulan}</td>
+         <td>${r.tahun}</td>
+         ${f.map(x=>`<td>${r[x] || 0}</td>`).join('')}
+         <td>${row}</td>
+       </tr>`;
+     });
+   });
+   tb.innerHTML+=`<tr class="total-row">
+     <td colspan="4">TOTAL KECAMATAN</td>
+     ${f.map(x=>`<td>${tot[x]}</td>`).join('')}
+     <td>${grand}</td>
+   </tr>`;
+ };
+};
+
+// ==================== EXPORT PDF FINAL ====================
+function exportPDF(nama){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('l', 'mm', 'a4');
+
+  const fb = document.getElementById('fb');
+  const ft = document.getElementById('ft');
+  const bulan = fb ? fb.value : 'Semua Bulan';
+  const tahun = ft ? ft.value : 'Semua Tahun';
+
+  let judul = `REKAP DATA ${nama.toUpperCase()}`;
+  if(nama.includes('_kecamatan')){
+    judul += ' BOTOLINGGO';
+  }
+
+  doc.setFontSize(14);
+  doc.text(judul, doc.internal.pageSize.getWidth()/2, 15, {align: 'center'}); // jarak atas 15mm
+  doc.setFontSize(11);
+  doc.text(`Bulan: ${bulan}  |  Tahun: ${tahun}`, doc.internal.pageSize.getWidth()/2, 22, {align: 'center'});
+
+  doc.autoTable({
+    html: '#table',
+    startY: 28, // tabel dimulai dari 28mm
+    styles: { fontSize: 8, halign: 'center', valign: 'middle' },
+    headStyles: { fillColor: [26, 115, 232], textColor: 255, halign: 'center' },
+    alternateRowStyles: { fillColor: [240, 240, 240] },
+    theme: 'grid'
+  });
+
+  doc.save(`rekap_${nama}.pdf`);
+}
+
+// ==================== HAPUS ====================
+function hapus(tipe,desa,i){
+ if(confirm('Hapus data?')){
+   db.ref(`data/${tipe}/${desa}`).get().then(snapshot=>{
+     const keys = Object.keys(snapshot.val() || {});
+     if(keys[i]){
+       db.ref(`data/${tipe}/${desa}/${keys[i]}`).remove().then(()=>{
+         data[tipe][desa].splice(i,1);
+         formDesa(desa,tipe);
+         notify("Data dihapus ✅",'success');
+       }).catch(()=>notify("Gagal hapus ❌",'error'));
+     }
+   });
+ }
+}
+
+// ==================== CLOSE DROPDOWN ====================
+function closeDropdowns(){document.querySelectorAll('nav li').forEach(li=>li.classList.remove('show'));}
+
+// ==================== YEAR ====================
+document.getElementById("year").textContent=new Date().getFullYear();
+
+// ==================== REGISTER SERVICE WORKER ====================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js')
+  .then(()=>console.log('Service Worker registered'))
+  .catch(err=>console.error('SW registration failed:', err));
+}
+</script>
+</body>
+</html>
